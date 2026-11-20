@@ -1,0 +1,54 @@
+name: Windows RDP Access
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Ganti dengan label Larger Runner (32GB) atau 'self-hosted' (Windows 10/11)
+    # Jika ingin tes di runner gratis (Windows Server 16GB), ubah menjadi: windows-latest
+    runs-on: [self-hosted, windows, 32gb]
+    timeout-minutes: 360 # Maksimal 6 jam per sesi
+
+    steps:
+      - name: Download & Extract Ngrok
+        run: |
+          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+          Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+
+      - name: Authenticate Ngrok
+        run: .\ngrok.exe config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+
+      - name: Enable RDP & Firewall
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -value 1
+
+      - name: Create/Update RDP User
+        run: |
+          $Password = ConvertTo-SecureString "${{ secrets.RDP_PASSWORD }}" -AsPlainText -Force
+          if (Get-LocalUser -Name "rdpuser" -ErrorAction SilentlyContinue) {
+            Set-LocalUser -Name "rdpuser" -Password $Password
+          } else {
+            New-LocalUser -Name "rdpuser" -Password $Password -FullName "RDP User"
+            Add-LocalGroupMember -Group "Administrators" -Member "rdpuser"
+          }
+
+      - name: Start Ngrok Tunnel (TCP 3389)
+        run: |
+          Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --region ap" -NoNewWindow
+          Start-Sleep -Seconds 5
+          $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+          $publicUrl = $tunnels.tunnels[0].public_url -replace "tcp://", ""
+          Write-Host "========================================="
+          Write-Host "RDP Address : $publicUrl"
+          Write-Host "Username    : rdpuser"
+          Write-Host "========================================="
+
+      - name: Keep Session Alive
+        run: |
+          # Menjaga workflow tetap berjalan sampai timeout atau dibatalkan manual
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
