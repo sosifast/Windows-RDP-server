@@ -1,4 +1,4 @@
-name: Windows RDP Access
+name: Windows RDP (Tailscale)
 
 on:
   workflow_dispatch:
@@ -9,13 +9,11 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Download & Extract Ngrok
-        run: |
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-          Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
-
-      - name: Authenticate Ngrok
-        run: .\ngrok.exe config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          args: --hostname=github-rdp
 
       - name: Enable RDP & Firewall
         run: |
@@ -33,15 +31,13 @@ jobs:
             Add-LocalGroupMember -Group "Administrators" -Member "rdpuser"
           }
 
-      - name: Start Ngrok Tunnel (TCP 3389)
+      - name: Show RDP Connection Info
         run: |
-          Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --region ap" -NoNewWindow
-          Start-Sleep -Seconds 5
-          $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-          $publicUrl = $tunnels.tunnels[0].public_url -replace "tcp://", ""
+          $tsIP = tailscale ip -4
           Write-Host "========================================="
-          Write-Host "RDP Address : $publicUrl"
-          Write-Host "Username    : rdpuser"
+          Write-Host "Tailscale IP : $tsIP"
+          Write-Host "Hostname     : github-rdp"
+          Write-Host "Username     : rdpuser"
           Write-Host "========================================="
 
       - name: Keep Session Alive
