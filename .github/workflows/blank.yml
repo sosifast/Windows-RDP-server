@@ -5,10 +5,8 @@ on:
 
 jobs:
   build:
-    # Ganti dengan label Larger Runner (32GB) atau 'self-hosted' (Windows 10/11)
-    # Jika ingin tes di runner gratis (Windows Server 16GB), ubah menjadi: windows-latest
-    runs-on: [self-hosted, windows, 32gb]
-    timeout-minutes: 360 # Maksimal 6 jam per sesi
+    runs-on: windows-latest
+    timeout-minutes: 360
 
     steps:
       - name: Download & Extract Ngrok
@@ -48,7 +46,6 @@ jobs:
 
       - name: Keep Session Alive
         run: |
-          # Menjaga workflow tetap berjalan sampai timeout atau dibatalkan manual
           while ($true) {
             Start-Sleep -Seconds 60
           }
